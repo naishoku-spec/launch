@@ -1,0 +1,649 @@
+/* ========================================
+   お弁当注文表 - スタイルシート
+   ======================================== */
+
+/* CSS Variables */
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --secondary-color: #64748b;
+    --danger-color: #dc2626;
+    --danger-hover: #b91c1c;
+    --success-color: #16a34a;
+    --background: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --weekend-bg: #f1f5f9;
+    --saturday-color: #2563eb;
+    --sunday-color: #dc2626;
+    --circle-color: #1e293b;
+    --cross-color: #dc2626;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+/* Reset & Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--background);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Container */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.period-display {
+    font-size: 18px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Settings Panel */
+.settings-panel {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+}
+
+.settings-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: center;
+}
+
+.setting-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-group label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.month-input {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.month-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.yen-prefix {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.amount-input {
+    width: 100px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    text-align: right;
+}
+
+.amount-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.total-group {
+    background: var(--background);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+}
+
+.total-price {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+/* Employee Management */
+.employee-management {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background: var(--background);
+}
+
+.btn-danger {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: var(--danger-hover);
+}
+
+.btn-cancel {
+    background: var(--background);
+    color: var(--text-secondary);
+}
+
+.btn-cancel:hover {
+    background: var(--border);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* Table Wrapper */
+.table-wrapper {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    overflow: auto;
+    /* Changed from overflow-x to auto to support sticky within container */
+    max-height: 80vh;
+    /* Added max-height to make header/footer sticky within the container */
+    margin-bottom: 20px;
+}
+
+/* Order Table */
+.order-table {
+    width: 100%;
+    border-collapse: separate;
+    /* Use separate to make borders work with sticky */
+    border-spacing: 0;
+    font-size: 14px;
+}
+
+.order-table th,
+.order-table td {
+    border: 1px solid var(--border);
+    padding: 8px 4px;
+    text-align: center;
+    min-width: 50px;
+    background: var(--surface);
+}
+
+/* Header Sticky */
+.order-table thead th {
+    background: #f1f5f9;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    /* Higher than date cells */
+    box-shadow: inset 0 -1px 0 var(--border), 0 1px 0 var(--border);
+}
+
+/* Footer Sticky */
+.order-table tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: #fef3c7 !important;
+    font-weight: 600;
+    box-shadow: inset 0 1px 0 var(--border), 0 -1px 0 var(--border);
+}
+
+/* First Column Sticky (Date & Labels) */
+.order-table th.date-header,
+.order-table td.date-cell,
+.order-table td.label-cell {
+    position: sticky;
+    left: 0;
+    z-index: 15;
+    background: #f8fafc;
+    min-width: 90px;
+    text-align: left;
+    padding-left: 12px;
+    box-shadow: inset -1px 0 0 var(--border), 1px 0 0 var(--border);
+}
+
+/* Top-Left Corner Cell */
+.order-table thead th.date-header {
+    z-index: 30;
+    /* Highest z-index for the corner */
+}
+
+/* Bottom-Left Label Cells in Footer */
+.order-table tfoot td.label-cell {
+    z-index: 30;
+    background: #fef3c7 !important;
+}
+
+/* Total Column Sticky (Optional but often helpful) */
+.order-table thead th.total-header,
+.order-table td.total-cell {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background: #f0f9ff;
+    box-shadow: inset 1px 0 0 var(--border), -1px 0 0 var(--border);
+}
+
+.order-table thead th.total-header {
+    z-index: 20;
+}
+
+.order-table tfoot td.total-cell {
+    z-index: 20;
+}
+
+/* Date Cell specific spacing */
+.date-cell {
+    white-space: nowrap;
+}
+
+.day-name {
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.day-name.saturday {
+    color: var(--saturday-color);
+}
+
+.day-name.sunday {
+    color: var(--sunday-color);
+}
+
+/* Weekend Rows */
+.weekend-row td {
+    background: var(--weekend-bg);
+}
+
+.weekend-row td.date-cell {
+    background: var(--weekend-bg);
+    /* Keep background for sticky cell */
+}
+
+/* Order Cells */
+.order-cell {
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 700;
+    transition: background 0.15s ease;
+    user-select: none;
+    height: 36px;
+}
+
+.order-cell:hover {
+    background: #e0e7ff;
+}
+
+.order-cell.circle::before {
+    content: '○';
+    color: var(--circle-color);
+}
+
+.order-cell.cross::before {
+    content: '×';
+    color: var(--cross-color);
+}
+
+/* Total Cells */
+.total-cell {
+    background: #f0f9ff;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+/* Footer Rows */
+.order-table tfoot td {
+    background: #fef3c7;
+    font-weight: 600;
+}
+
+.order-table tfoot td.label-cell {
+    text-align: left;
+    padding-left: 12px;
+}
+
+/* Notice */
+.notice {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: var(--radius-md);
+    padding: 16px 24px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: 1px solid #fcd34d;
+}
+
+.notice p {
+    font-size: 16px;
+    color: #92400e;
+}
+
+.notice strong {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.circle-mark {
+    display: inline-block;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 2px;
+}
+
+/* Save Status */
+.save-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    color: var(--success-color);
+    font-size: 13px;
+}
+
+.save-indicator {
+    width: 8px;
+    height: 8px;
+    background: var(--success-color);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.save-status.saving .save-indicator {
+    background: #f59e0b;
+}
+
+.save-status.saving .save-text {
+    color: #f59e0b;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    animation: modalSlideIn 0.2s ease;
+}
+
+.modal-large {
+    max-width: 500px;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-body label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.text-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-family: inherit;
+}
+
+.text-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--background);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* Employee List */
+.employee-list {
+    list-style: none;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.employee-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.employee-list li:last-child {
+    border-bottom: none;
+}
+
+.employee-name {
+    font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 16px;
+    }
+
+    .title {
+        font-size: 22px;
+    }
+
+    .settings-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .setting-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .employee-management {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .order-table th,
+    .order-table td {
+        padding: 6px 2px;
+        font-size: 12px;
+        min-width: 35px;
+    }
+
+    .order-cell {
+        font-size: 14px;
+    }
+}
+
+/* Print Styles */
+@media print {
+
+    .settings-panel,
+    .employee-management,
+    .save-status,
+    .modal {
+        display: none !important;
+    }
+
+    .container {
+        max-width: 100%;
+        padding: 0;
+    }
+
+    .table-wrapper {
+        box-shadow: none;
+        border: 2px solid #000;
+    }
+
+    .order-table th,
+    .order-table td {
+        border: 1px solid #000;
+    }
+}

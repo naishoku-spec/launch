@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お弁当注文表</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+</head>
+
+<body>
+    <script>
+        // Firebase設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyCeYbVUurF49w5P_iUx9XVa5oMx5P5G12k",
+            authDomain: "lunch-order-8d785.firebaseapp.com",
+            databaseURL: "https://lunch-order-8d785-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "lunch-order-8d785",
+            storageBucket: "lunch-order-8d785.firebasestorage.app",
+            messagingSenderId: "846202375630",
+            appId: "1:846202375630:web:2dc2f5e4f9648b4ba8af9f",
+            measurementId: "G-94KNVCHZFM"
+        };
+
+        // 初期化（Configが入っている場合のみ）
+        if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            firebase.initializeApp(firebaseConfig);
+        }
+    </script>
+    <div class="container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1 class="title">お弁当注文表</h1>
+            <div class="period-display" id="periodDisplay"></div>
+        </header>
+
+        <!-- 設定パネル -->
+        <div class="settings-panel">
+            <div class="settings-row">
+                <div class="setting-group">
+                    <label>表示月:</label>
+                    <input type="month" id="monthSelector" class="month-input">
+                </div>
+                <div class="setting-group">
+                    <label>会社負担分:</label>
+                    <span class="yen-prefix">¥</span>
+                    <input type="number" id="companyShare" class="amount-input" placeholder="0" min="0">
+                </div>
+                <div class="setting-group">
+                    <label>個人負担分:</label>
+                    <span class="yen-prefix">¥</span>
+                    <input type="number" id="personalShare" class="amount-input" placeholder="0" min="0">
+                </div>
+                <div class="setting-group total-group">
+                    <label>計:</label>
+                    <span class="yen-prefix">¥</span>
+                    <span id="totalPrice" class="total-price">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 社員管理 -->
+        <div class="employee-management">
+            <button id="addEmployeeBtn" class="btn btn-primary">
+                <span class="btn-icon">+</span> 社員追加
+            </button>
+            <button id="manageEmployeesBtn" class="btn btn-secondary">
+                社員管理
+            </button>
+        </div>
+
+        <!-- 注文表テーブル -->
+        <div class="table-wrapper">
+            <table class="order-table" id="orderTable">
+                <thead id="tableHead">
+                    <!-- JavaScriptで動的に生成 -->
+                </thead>
+                <tbody id="tableBody">
+                    <!-- JavaScriptで動的に生成 -->
+                </tbody>
+                <tfoot id="tableFoot">
+                    <!-- JavaScriptで動的に生成 -->
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- フッター注意書き -->
+        <div class="notice">
+            <p>当日、<strong>朝8時45分</strong>までに各自で<span class="circle-mark">○</span>印をしてください</p>
+        </div>
+
+        <!-- 保存状態表示 -->
+        <div class="save-status" id="saveStatus">
+            <span class="save-indicator"></span>
+            <span class="save-text">自動保存済み</span>
+        </div>
+    </div>
+
+    <!-- 社員追加モーダル -->
+    <div class="modal" id="addEmployeeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>社員追加</h2>
+                <button class="modal-close" id="closeAddModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="newEmployeeName">社員名:</label>
+                <input type="text" id="newEmployeeName" class="text-input" placeholder="名前を入力">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="cancelAddEmployee">キャンセル</button>
+                <button class="btn btn-primary" id="confirmAddEmployee">追加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 社員管理モーダル -->
+    <div class="modal" id="manageEmployeesModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>社員管理</h2>
+                <button class="modal-close" id="closeManageModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <ul class="employee-list" id="employeeList">
+                    <!-- JavaScriptで動的に生成 -->
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="closeManageEmployees">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
