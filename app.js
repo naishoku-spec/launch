@@ -281,7 +281,7 @@ function updatePeriodDisplay() {
     // 期間の表示例: 2026年2月 (1/16 〜 2/15)
     const startStr = `${startDate.getMonth() + 1}/${startDate.getDate()}`;
     const endStr = `${endDate.getMonth() + 1}/${endDate.getDate()}`;
-    periodDisplay.textContent = `${year}年${parseInt(month)}月 (${startStr} 〜 ${endStr})`;
+    periodDisplay.innerHTML = `${year}年${parseInt(month)}月 <br class="period-br">(${startStr} 〜 ${endStr})`;
 }
 
 function updateTotalPrice() {
@@ -455,11 +455,27 @@ function getEmployeeOrderCount(emp) {
 function openAddEmployeeModal() { document.getElementById('addEmployeeModal').classList.add('active'); }
 function closeAddEmployeeModal() { document.getElementById('addEmployeeModal').classList.remove('active'); }
 function addEmployee() {
-    const name = document.getElementById('newEmployeeName').value.trim();
-    if (name && !appState.employees.includes(name)) {
-        appState.employees.push(name);
+    const rawInput = document.getElementById('newEmployeeName').value.trim();
+    if (!rawInput) return;
+
+    // 改行またはカンマで区切って配列にする
+    const rawNames = rawInput.split(/[\n,，]/);
+    let addedCount = 0;
+
+    rawNames.forEach(rawName => {
+        const name = rawName.trim();
+        if (name && !appState.employees.includes(name)) {
+            appState.employees.push(name);
+            addedCount++;
+        }
+    });
+
+    if (addedCount > 0) {
         saveData();
+        document.getElementById('newEmployeeName').value = ''; // 入力をクリア
         closeAddEmployeeModal();
+    } else {
+        alert('既に追加されているか、名前が正しく入力されていません。');
     }
 }
 function openManageEmployeesModal() {

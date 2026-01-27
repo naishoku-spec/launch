@@ -115,8 +115,10 @@
                 <button class="modal-close" id="closeAddModal">&times;</button>
             </div>
             <div class="modal-body">
+                <p class="modal-desc">名前を入力してください。<br>改行またはカンマで区切ると、複数人を一括で追加できます。</p>
                 <label for="newEmployeeName">社員名:</label>
-                <input type="text" id="newEmployeeName" class="text-input" placeholder="名前を入力">
+                <textarea id="newEmployeeName" class="text-input" style="height: 120px;"
+                    placeholder="例：&#10;佐藤 太郎&#10;田中 花子"></textarea>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-cancel" id="cancelAddEmployee">キャンセル</button>
