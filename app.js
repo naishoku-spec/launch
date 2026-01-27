@@ -242,6 +242,11 @@ function initializeEventListeners() {
     document.getElementById('closeManageModal').addEventListener('click', closeManageEmployeesModal);
     document.getElementById('closeManageEmployees').addEventListener('click', closeManageEmployeesModal);
 
+    // 一括入力ボタンの開閉
+    document.getElementById('bulkOrderBtn').addEventListener('click', openBulkOrderModal);
+    document.getElementById('closeBulkModal').addEventListener('click', closeBulkOrderModal);
+    document.getElementById('cancelBulkOrder').addEventListener('click', closeBulkOrderModal);
+
     document.getElementById('confirmBulkCircle').addEventListener('click', () => executeBulkOrder('circle'));
     document.getElementById('confirmBulkCross').addEventListener('click', () => executeBulkOrder('cross'));
 

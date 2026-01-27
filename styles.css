@@ -666,13 +666,18 @@ body {
 
     .table-wrapper {
         order: 2;
-        max-height: 70vh;
-        overflow: auto;
+        max-height: none;
+        overflow-x: auto;
+        overflow-y: visible;
         margin-bottom: 20px;
-        /* スマホでの斜めスクロール（ドリフト）を軽減し、操作感をなめらかにする */
-        overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
+    }
+
+    /* ページをスクロールした際、ヘッダー（社員名）を画面上端に固定 */
+    .order-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 100;
     }
 
     /* 一括入力ボタン */
