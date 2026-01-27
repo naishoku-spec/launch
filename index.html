@@ -87,11 +87,17 @@
             <button id="manageEmployeesBtn" class="btn btn-secondary">
                 社員管理
             </button>
+            <button id="bulkOrderBtn" class="btn btn-info">
+                <span class="btn-icon">✓</span> 一括入力
+            </button>
+            <button id="deleteOldDataBtn" class="btn btn-danger">
+                <span class="btn-icon">🗑</span> 去年のデータを削除
+            </button>
         </div>
 
         <!-- フッター注意書き -->
         <div class="notice">
-            <p>当日、<strong>朝8時45分</strong>までに<br class="mobile-br">各自で<span class="circle-mark">○</span>印をしてください</p>
+            <p>当日、<strong>朝8時45分</strong>までに各自で<br class="mobile-br"> <span class="circle-mark">○</span>印をしてください</p>
         </div>
 
         <!-- 保存状態表示 -->
@@ -133,6 +139,28 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" id="closeManageEmployees">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 一括入力モーダル -->
+    <div class="modal" id="bulkOrderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>一括入力</h2>
+                <button class="modal-close" id="closeBulkModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">選択した社員の「全ての営業日」に<br>一括で記号を入力します。</p>
+                <label for="bulkEmployeeSelect">社員を選択:</label>
+                <select id="bulkEmployeeSelect" class="text-input">
+                    <!-- JavaScriptで動的に生成 -->
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="cancelBulkOrder" style="margin-right: auto;">キャンセル</button>
+                <button class="btn btn-primary" id="confirmBulkCircle">一括 ◯</button>
+                <button class="btn btn-danger" id="confirmBulkCross">一括 ×</button>
             </div>
         </div>
     </div>

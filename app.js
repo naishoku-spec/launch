@@ -15,6 +15,66 @@ const DEFAULT_EMPLOYEES = [
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
+/**
+ * 日本の祝日を動的に計算する関数
+ * (2027年以降も対応)
+ */
+function getHolidayName(dateStr) {
+    const date = new Date(dateStr);
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const w = date.getDay(); // 0: 日, 1: 月, ...
+
+    // 第n月曜日を判定するための補助
+    const nthMonday = Math.floor((d - 1) / 7) + 1;
+
+    // 固定の祝日
+    if (m === 1 && d === 1) return '元日';
+    if (m === 2 && d === 11) return '建国記念の日';
+    if (m === 2 && d === 23) return '天皇誕生日';
+    if (m === 4 && d === 29) return '昭和の日';
+    if (m === 5 && d === 3) return '憲法記念日';
+    if (m === 5 && d === 4) return 'みどりの日';
+    if (m === 5 && d === 5) return 'こどもの日';
+    if (m === 8 && d === 11) return '山の日';
+    if (m === 11 && d === 3) return '文化の日';
+    if (m === 11 && d === 23) return '勤労感謝の日';
+
+    // ハッピーマンデー (第n月曜日)
+    if (m === 1 && nthMonday === 2 && w === 1) return '成人の日';
+    if (m === 7 && nthMonday === 3 && w === 1) return '海の日';
+    if (m === 9 && nthMonday === 3 && w === 1) return '敬老の日';
+    if (m === 10 && nthMonday === 2 && w === 1) return 'スポーツの日';
+
+    // 春分・秋分 (簡易計算式: 2099年まで有効)
+    if (m === 3) {
+        const shunbun = Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+        if (d === shunbun) return '春分の日';
+    }
+    if (m === 9) {
+        const shubun = Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+        if (d === shubun) return '秋分の日';
+    }
+
+    // 振替休日の判定
+    // 前日が日曜日かつ祝日の場合
+    const yesterday = new Date(date);
+    yesterday.setDate(d - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${(yesterday.getMonth() + 1).toString().padStart(2, '0')}-${yesterday.getDate().toString().padStart(2, '0')}`;
+    const yesterdayName = getHolidayName(yesterdayStr);
+    if (yesterdayName && yesterday.getDay() === 0) {
+        // GWなどの連続祝日の場合の振替
+        if (yesterdayName !== '振替休日') return '振替休日';
+    }
+    // 月曜・火曜が振替休日になるパターン (5/6など) の補助
+    if (m === 5 && d === 6 && (w === 2 || w === 3)) {
+        if (getHolidayName(`${y}-05-03`) && getHolidayName(`${y}-05-04`) && getHolidayName(`${y}-05-05`)) return '振替休日';
+    }
+
+    return null;
+}
+
 // ========================================
 // アプリケーション状態
 // ========================================
@@ -29,6 +89,7 @@ let appState = {
 
 let db = null;
 let isFirebaseEnabled = false;
+let isFooterExpanded = false; // 集計詳細の開閉状態
 
 // ========================================
 // 初期化
@@ -180,6 +241,12 @@ function initializeEventListeners() {
     document.getElementById('manageEmployeesBtn').addEventListener('click', openManageEmployeesModal);
     document.getElementById('closeManageModal').addEventListener('click', closeManageEmployeesModal);
     document.getElementById('closeManageEmployees').addEventListener('click', closeManageEmployeesModal);
+
+    document.getElementById('confirmBulkCircle').addEventListener('click', () => executeBulkOrder('circle'));
+    document.getElementById('confirmBulkCross').addEventListener('click', () => executeBulkOrder('cross'));
+
+    // データ整理関連
+    document.getElementById('deleteOldDataBtn').addEventListener('click', executeDeleteOldData);
 }
 
 function updateInputValues() {
@@ -241,18 +308,31 @@ function renderTableBody(dates) {
         const date = new Date(dateStr);
         const dayOfWeek = date.getDay();
         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isHoliday = getHolidayName(dateStr);
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || isHoliday;
         const month = date.getMonth() + 1;
         const day = date.getDate();
-        let dayClass = dayOfWeek === 6 ? 'saturday' : (dayOfWeek === 0 ? 'sunday' : '');
 
+        let dayClass = '';
+        if (dayOfWeek === 6) dayClass = 'saturday';
+        if (dayOfWeek === 0 || isHoliday) dayClass = 'sunday'; // 祝日も赤色（sundayクラス）にする
+
+        // 祝日や会社休日に合わせた色付け（土日の背景色）
         html += `<tr class="${isWeekend ? 'weekend-row' : ''}">`;
-        html += `<td class="date-cell">${month}/${day}<span class="day-name ${dayClass}">(${dayNames[dayOfWeek]})</span></td>`;
+        const holidayName = isHoliday ? `<span class="holiday-name">${isHoliday}</span>` : '';
+        html += `<td class="date-cell">${month}/${day}${holidayName}<span class="day-name ${dayClass}">(${dayNames[dayOfWeek]})</span></td>`;
+
+        // 今日の日付 (YYYY-MM-DD)
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+        const isPast = dateStr < todayStr;
 
         let dailyTotal = 0;
         appState.employees.forEach(emp => {
             const status = getOrderStatus(dateStr, emp);
             let cellClass = 'order-cell';
+            if (isWeekend) cellClass += ' disabled';
+            if (isPast) cellClass += ' locked'; // 過去の日は操作不可
             if (status === 'circle') { cellClass += ' circle'; dailyTotal++; }
             else if (status === 'cross') { cellClass += ' cross'; }
             html += `<td class="${cellClass}" data-date="${dateStr}" data-employee="${escapeHtml(emp)}"></td>`;
@@ -267,7 +347,7 @@ function renderTableFoot() {
     const tfoot = document.getElementById('tableFoot');
     let html = '';
 
-    // お弁当(食)
+    // お弁当(食) - 常に表示
     html += '<tr><td class="label-cell">お弁当(食)</td>';
     let grandTotal = 0;
     appState.employees.forEach(emp => {
@@ -277,38 +357,74 @@ function renderTableFoot() {
     });
     html += `<td class="total-cell">${grandTotal}</td></tr>`;
 
-    // 会社負担(円)
-    html += '<tr><td class="label-cell">会社負担(円)</td>';
-    appState.employees.forEach(emp => {
-        const amount = getEmployeeOrderCount(emp) * appState.companyShare;
-        html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
-    });
-    html += `<td class="total-cell">${(grandTotal * appState.companyShare).toLocaleString()}</td></tr>`;
+    // 詳細表示切り替えボタン行
+    html += `<tr class="toggle-row"><td colspan="${appState.employees.length + 2}" onclick="toggleFooter()">`;
+    html += `${isFooterExpanded ? '▲ 詳細を閉じる' : '▼ 集計詳細（金額・氏名）を表示'}`;
+    html += '</td></tr>';
 
-    // 個人負担(円)
-    html += '<tr><td class="label-cell">個人負担(円)</td>';
-    appState.employees.forEach(emp => {
-        const amount = getEmployeeOrderCount(emp) * appState.personalShare;
-        html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
-    });
-    html += `<td class="total-cell">${(grandTotal * appState.personalShare).toLocaleString()}</td></tr>`;
+    if (isFooterExpanded) {
+        // 会社負担(円)
+        html += '<tr class="detail-row"><td class="label-cell">会社負担(円)</td>';
+        appState.employees.forEach(emp => {
+            const amount = getEmployeeOrderCount(emp) * appState.companyShare;
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(grandTotal * appState.companyShare).toLocaleString()}</td></tr>`;
 
-    // 合計(円)
-    const rate = appState.companyShare + appState.personalShare;
-    html += '<tr><td class="label-cell">合計(円)</td>';
-    appState.employees.forEach(emp => {
-        const amount = getEmployeeOrderCount(emp) * rate;
-        html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
-    });
-    html += `<td class="total-cell">${(grandTotal * rate).toLocaleString()}</td></tr>`;
+        // 個人負担(円)
+        html += '<tr class="detail-row"><td class="label-cell">個人負担(円)</td>';
+        appState.employees.forEach(emp => {
+            const amount = getEmployeeOrderCount(emp) * appState.personalShare;
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(grandTotal * appState.personalShare).toLocaleString()}</td></tr>`;
+
+        // 合計(円)
+        const rate = appState.companyShare + appState.personalShare;
+        html += '<tr class="detail-row"><td class="label-cell">合計(円)</td>';
+        appState.employees.forEach(emp => {
+            const amount = getEmployeeOrderCount(emp) * rate;
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(grandTotal * rate).toLocaleString()}</td></tr>`;
+
+        // 氏名行（下部）
+        html += '<tr class="detail-row"><td class="label-cell">氏名</td>';
+        appState.employees.forEach(emp => {
+            html += `<td style="font-weight: 500; background: #fffbeb !important;">${escapeHtml(emp)}</td>`;
+        });
+        html += '<td class="total-cell">合計</td></tr>';
+    }
 
     tfoot.innerHTML = html;
+}
+
+function toggleFooter() {
+    isFooterExpanded = !isFooterExpanded;
+    renderTableFoot();
 }
 
 function handleCellClick(e) {
     const cell = e.target;
     const dateStr = cell.dataset.date;
     const employee = cell.dataset.employee;
+
+    // 土日・祝日はクリック無効
+    const date = new Date(dateStr);
+    const dayOfWeek = date.getDay();
+    const isHoliday = getHolidayName(dateStr);
+    if (dayOfWeek === 0 || dayOfWeek === 6 || isHoliday) {
+        return;
+    }
+
+    // 過去の日は変更不可
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    if (dateStr < todayStr) {
+        alert('過去の注文は変更できません。');
+        return;
+    }
+
     const current = getOrderStatus(dateStr, employee);
     let next = current === null ? 'circle' : (current === 'circle' ? 'cross' : null);
     setOrderStatus(dateStr, employee, next);
@@ -343,10 +459,68 @@ function addEmployee() {
 }
 function openManageEmployeesModal() {
     const list = document.getElementById('employeeList');
-    list.innerHTML = appState.employees.map((emp, i) => `<li>${escapeHtml(emp)} <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${i})">削除</button></li>`).join('');
+    list.innerHTML = appState.employees.map((emp, i) => `<li><span class="employee-name">${escapeHtml(emp)}</span> <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${i})">削除</button></li>`).join('');
     document.getElementById('manageEmployeesModal').classList.add('active');
 }
 function closeManageEmployeesModal() { document.getElementById('manageEmployeesModal').classList.remove('active'); }
+
+// 一括入力モーダル処理
+function openBulkOrderModal() {
+    const select = document.getElementById('bulkEmployeeSelect');
+    select.innerHTML = appState.employees.map(emp => `<option value="${escapeHtml(emp)}">${escapeHtml(emp)}</option>`).join('');
+    document.getElementById('bulkOrderModal').classList.add('active');
+}
+function closeBulkOrderModal() { document.getElementById('bulkOrderModal').classList.remove('active'); }
+
+function executeBulkOrder(status) {
+    const employee = document.getElementById('bulkEmployeeSelect').value;
+    if (!employee) return;
+
+    const markName = status === 'circle' ? '◯' : '×';
+    if (!confirm(`${employee} さんの今月の全営業分を「${markName}」に一括変更しますか？\n（すでに入力されている分は ${markName} で上書きされます）`)) return;
+
+    const dates = getDatesInMonth(appState.currentMonth);
+    dates.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const dayOfWeek = date.getDay();
+        const isHoliday = getHolidayName(dateStr);
+
+        // 土日・祝日以外の営業日のみ更新
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday) {
+            setOrderStatus(dateStr, employee, status);
+        }
+    });
+
+    saveData();
+    closeBulkOrderModal();
+    renderAll();
+}
+
+function executeDeleteOldData() {
+    const currentYear = new Date().getFullYear();
+    const targetYear = currentYear - 1;
+
+    if (!confirm(`${targetYear}年以前の全ての注文データを削除しますか？\n（この操作は取り消せません）`)) return;
+    if (!confirm(`本当によろしいですか？\n${targetYear}年12月31日までのデータが全て消去されます。`)) return;
+
+    let deleteCount = 0;
+    Object.keys(appState.orders).forEach(dateStr => {
+        const year = parseInt(dateStr.split('-')[0]);
+        if (year <= targetYear) {
+            delete appState.orders[dateStr];
+            deleteCount++;
+        }
+    });
+
+    if (deleteCount > 0) {
+        saveData();
+        renderAll();
+        alert(`${deleteCount}件の過去データを削除しました。`);
+    } else {
+        alert('削除対象の古いデータは見つかりませんでした。');
+    }
+}
+
 function deleteEmployee(i) {
     if (confirm('削除しますか？')) {
         appState.employees.splice(i, 1);

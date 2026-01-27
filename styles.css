@@ -204,6 +204,17 @@ body {
     background: var(--danger-hover);
 }
 
+.btn-info {
+    background: #0ea5e9;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #0284c7;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
 .btn-cancel {
     background: var(--background);
     color: var(--text-secondary);
@@ -224,10 +235,10 @@ body {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--border);
-    overflow: auto;
-    /* Changed from overflow-x to auto to support sticky within container */
-    max-height: 80vh;
-    /* Added max-height to make header/footer sticky within the container */
+    overflow-x: auto;
+    /* 横方向のスクロールは必要に応じて残す */
+    overflow-y: visible;
+    /* 縦方向は全体表示 */
     margin-bottom: 20px;
 }
 
@@ -319,6 +330,14 @@ body {
     white-space: nowrap;
 }
 
+.holiday-name {
+    font-size: 10px;
+    color: var(--sunday-color);
+    display: block;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
 .day-name {
     font-size: 12px;
     margin-left: 4px;
@@ -352,8 +371,24 @@ body {
     height: 36px;
 }
 
-.order-cell:hover {
+.order-cell:hover:not(.disabled) {
     background: #e0e7ff;
+}
+
+.order-cell.disabled {
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.order-cell.locked {
+    cursor: not-allowed;
+    background: #f1f5f9;
+    /* 過去の日は少し暗くする */
+    opacity: 0.8;
+}
+
+.order-cell.locked:hover {
+    background: #f1f5f9;
 }
 
 .order-cell.circle::before {
@@ -384,6 +419,31 @@ body {
     padding-left: 12px;
 }
 
+/* Toggle Row */
+.toggle-row td {
+    background: #fff !important;
+    color: var(--primary-color);
+    font-weight: 500;
+    cursor: pointer;
+    padding: 12px !important;
+    text-align: center !important;
+    position: sticky;
+    bottom: 0;
+    z-index: 21;
+    border-top: 2px solid var(--primary-color) !important;
+    transition: background 0.2s ease;
+}
+
+.toggle-row td:hover {
+    background: #eff6ff !important;
+    text-decoration: underline;
+}
+
+.detail-row td {
+    background: #fffbeb !important;
+    /* 少し明るい黄色 */
+}
+
 /* Notice */
 .notice {
     background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
@@ -397,6 +457,13 @@ body {
 .notice p {
     font-size: 16px;
     color: #92400e;
+    line-height: 1.8;
+    /* 行間を少し広げて読みやすく */
+}
+
+.mobile-br {
+    display: none;
+    /* デフォルト（PC）では改行しない */
 }
 
 .notice strong {
@@ -588,31 +655,71 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
     .container {
+        display: flex;
+        flex-direction: column;
         padding: 16px;
+    }
+
+    .header {
+        order: 1;
+    }
+
+    .table-wrapper {
+        order: 2;
+        max-height: 70vh;
+        overflow: auto;
+        margin-bottom: 20px;
+        /* スマホでの斜めスクロール（ドリフト）を軽減し、操作感をなめらかにする */
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+
+    /* 一括入力ボタン */
+    #bulkOrderBtn {
+        order: 3;
+        width: 100%;
+        margin-bottom: 12px;
+    }
+
+    #addEmployeeBtn {
+        order: 4;
+        width: 100%;
+        margin-bottom: 12px;
+    }
+
+    #manageEmployeesBtn {
+        order: 5;
+        width: 100%;
+        margin-bottom: 12px;
+    }
+
+    #deleteOldDataBtn {
+        order: 6;
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
+    /* 計算表 (表示月・金額設定) */
+    .settings-panel {
+        order: 7;
+        margin-bottom: 20px;
+    }
+
+    .employee-management {
+        display: contents;
+    }
+
+    .notice {
+        order: 8;
+    }
+
+    .save-status {
+        order: 9;
     }
 
     .title {
         font-size: 22px;
-    }
-
-    .settings-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
-    }
-
-    .setting-group {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .employee-management {
-        flex-direction: column;
-    }
-
-    .btn {
-        width: 100%;
-        justify-content: center;
     }
 
     .order-table th,
