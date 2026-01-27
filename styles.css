@@ -150,7 +150,8 @@ body {
 .employee-management {
     display: flex;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-top: 10px;
+    margin-bottom: 24px;
 }
 
 /* Buttons */
@@ -411,6 +412,10 @@ body {
     margin: 0 2px;
 }
 
+.mobile-br {
+    display: none;
+}
+
 /* Save Status */
 .save-status {
     display: flex;
@@ -619,6 +624,10 @@ body {
 
     .order-cell {
         font-size: 14px;
+    }
+
+    .mobile-br {
+        display: block;
     }
 }
 

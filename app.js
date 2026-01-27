@@ -199,9 +199,17 @@ function renderAll() {
 }
 
 function updatePeriodDisplay() {
+    const dates = getDatesInMonth(appState.currentMonth);
+    const startDate = new Date(dates[0]);
+    const endDate = new Date(dates[dates.length - 1]);
+
     const [year, month] = appState.currentMonth.split('-');
     const periodDisplay = document.getElementById('periodDisplay');
-    periodDisplay.textContent = `${year}年${parseInt(month)}月`;
+
+    // 期間の表示例: 2026年2月 (1/16 〜 2/15)
+    const startStr = `${startDate.getMonth() + 1}/${startDate.getDate()}`;
+    const endStr = `${endDate.getMonth() + 1}/${endDate.getDate()}`;
+    periodDisplay.textContent = `${year}年${parseInt(month)}月 (${startStr} 〜 ${endStr})`;
 }
 
 function updateTotalPrice() {
@@ -314,9 +322,10 @@ function setOrderStatus(date, emp, status) {
     else delete appState.orders[date][emp];
 }
 function getEmployeeOrderCount(emp) {
+    const dates = getDatesInMonth(appState.currentMonth);
     let count = 0;
-    Object.keys(appState.orders).forEach(date => {
-        if (date.startsWith(appState.currentMonth) && appState.orders[date][emp] === 'circle') count++;
+    dates.forEach(date => {
+        if (appState.orders[date] && appState.orders[date][emp] === 'circle') count++;
     });
     return count;
 }
@@ -349,8 +358,22 @@ function deleteEmployee(i) {
 function getDatesInMonth(m) {
     const [y, mo] = m.split('-').map(Number);
     const d = [];
-    for (let i = 1; i <= new Date(y, mo, 0).getDate(); i++) {
-        d.push(`${y}-${mo.toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`);
+
+    // 15日締め: 前月16日 〜 当月15日
+    // new Date(y, mo - 1, 15) は当月15日 (moは1-indexedなので、Dateの引数としてはmo-1が当月)
+    // 前月16日は new Date(y, mo - 2, 16)
+    const startDate = new Date(y, mo - 2, 16);
+    const endDate = new Date(y, mo - 1, 15);
+
+    let current = new Date(startDate);
+    while (current <= endDate) {
+        // YYYY-MM-DD 形式に変換
+        const year = current.getFullYear();
+        const month = (current.getMonth() + 1).toString().padStart(2, '0');
+        const date = current.getDate().toString().padStart(2, '0');
+        d.push(`${year}-${month}-${date}`);
+
+        current.setDate(current.getDate() + 1);
     }
     return d;
 }
