@@ -498,16 +498,20 @@ function executeBulkOrder(status) {
     if (!employee) return;
 
     const markName = status === 'circle' ? '◯' : '×';
-    if (!confirm(`${employee} さんの今月の全営業分を「${markName}」に一括変更しますか？\n（すでに入力されている分は ${markName} で上書きされます）`)) return;
+    if (!confirm(`${employee} さんの今月の全営業分を「${markName}」に一括変更しますか？\n（ロックされていない日のみ更新されます）`)) return;
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
 
     const dates = getDatesInMonth(appState.currentMonth);
     dates.forEach(dateStr => {
         const date = new Date(dateStr);
         const dayOfWeek = date.getDay();
         const isHoliday = getHolidayName(dateStr);
+        const isPast = dateStr < todayStr;
 
-        // 土日・祝日以外の営業日のみ更新
-        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday) {
+        // 土日・祝日・過去の日以外の営業日のみ更新
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday && !isPast) {
             setOrderStatus(dateStr, employee, status);
         }
     });
