@@ -7,6 +7,8 @@
 // ========================================
 
 const STORAGE_KEY = 'bentoOrderData';
+const SECRET_KEY = 'bento-secure-2026-xyz-789254bb'; // ← ここにFirebaseのルールと同じ合言葉を入れてください
+const DB_PATH = `bentoData/${SECRET_KEY}`;
 
 const DEFAULT_EMPLOYEES = [
     '横井', '横井②', '克也', '牛田', '西岡', '今枝', '滝沢',
@@ -103,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Firebase is enabled.");
 
         // クラウドからデータをリアルタイム取得
-        const dataRef = db.ref('bentoData');
+        const dataRef = db.ref(DB_PATH);
         dataRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -184,7 +186,7 @@ function saveData() {
 
     if (isFirebaseEnabled) {
         // Firebaseに保存
-        db.ref('bentoData').set(appState)
+        db.ref(DB_PATH).set(appState)
             .then(() => {
                 showSavedStatus();
             })
