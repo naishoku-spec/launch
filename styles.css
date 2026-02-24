@@ -368,6 +368,17 @@ body {
     /* Keep background for sticky cell */
 }
 
+/* Today Row */
+.today-row td {
+    background: #bbf7d0 !important;
+    /* Clearly visible green */
+}
+
+.today-row td.date-cell {
+    background: #86efac !important;
+    /* Stronger green for the date cell */
+}
+
 /* Order Cells */
 .order-cell {
     cursor: pointer;

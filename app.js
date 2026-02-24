@@ -311,6 +311,11 @@ function renderTableHead() {
 function renderTableBody(dates) {
     const tbody = document.getElementById('tableBody');
     let html = '';
+
+    // 今日の日付 (YYYY-MM-DD) を取得しておく
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+
     dates.forEach(dateStr => {
         const date = new Date(dateStr);
         const dayOfWeek = date.getDay();
@@ -319,20 +324,20 @@ function renderTableBody(dates) {
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || isHoliday;
         const month = date.getMonth() + 1;
         const day = date.getDate();
+        const isToday = dateStr === todayStr;
+        const isPast = dateStr < todayStr;
 
         let dayClass = '';
         if (dayOfWeek === 6) dayClass = 'saturday';
         if (dayOfWeek === 0 || isHoliday) dayClass = 'sunday'; // 祝日も赤色（sundayクラス）にする
 
-        // 祝日や会社休日に合わせた色付け（土日の背景色）
-        html += `<tr class="${isWeekend ? 'weekend-row' : ''}">`;
+        // 祝日や会社休日に合わせた色付け
+        let rowClass = isWeekend ? 'weekend-row' : '';
+        if (isToday) rowClass += ' today-row';
+
+        html += `<tr class="${rowClass}">`;
         const holidayName = isHoliday ? `<span class="holiday-name">${isHoliday}</span>` : '';
         html += `<td class="date-cell">${month}/${day}${holidayName}<span class="day-name ${dayClass}">(${dayNames[dayOfWeek]})</span></td>`;
-
-        // 今日の日付 (YYYY-MM-DD)
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-        const isPast = dateStr < todayStr;
 
         let dailyTotal = 0;
         appState.employees.forEach(emp => {
