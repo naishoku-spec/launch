@@ -86,6 +86,8 @@ let appState = {
     currentMonth: new Date().toISOString().slice(0, 7), // YYYY-MM
     companyShare: 280,
     personalShare: 200,
+    minoyaCompanyShare: 280,
+    minoyaPersonalShare: 220,
     orders: {} // { 'YYYY-MM-DD': { '社員名': 'circle' | 'cross' | null } }
 };
 
@@ -235,6 +237,22 @@ function initializeEventListeners() {
         saveData();
     });
 
+    // ミノヤ金額入力
+    const minoyaCompanyShare = document.getElementById('minoyaCompanyShare');
+    const minoyaPersonalShare = document.getElementById('minoyaPersonalShare');
+
+    minoyaCompanyShare.addEventListener('input', (e) => {
+        appState.minoyaCompanyShare = parseInt(e.target.value) || 0;
+        updateTotalPrice();
+        saveData();
+    });
+
+    minoyaPersonalShare.addEventListener('input', (e) => {
+        appState.minoyaPersonalShare = parseInt(e.target.value) || 0;
+        updateTotalPrice();
+        saveData();
+    });
+
     // 社員管理ボタンなど
     document.getElementById('addEmployeeBtn').addEventListener('click', openAddEmployeeModal);
     document.getElementById('closeAddModal').addEventListener('click', closeAddEmployeeModal);
@@ -260,6 +278,8 @@ function updateInputValues() {
     document.getElementById('monthSelector').value = appState.currentMonth;
     document.getElementById('companyShare').value = appState.companyShare;
     document.getElementById('personalShare').value = appState.personalShare;
+    document.getElementById('minoyaCompanyShare').value = appState.minoyaCompanyShare || 0;
+    document.getElementById('minoyaPersonalShare').value = appState.minoyaPersonalShare || 0;
 }
 
 // ========================================
@@ -289,6 +309,9 @@ function updatePeriodDisplay() {
 function updateTotalPrice() {
     const total = appState.companyShare + appState.personalShare;
     document.getElementById('totalPrice').textContent = total.toLocaleString();
+
+    const minoyaTotal = (appState.minoyaCompanyShare || 0) + (appState.minoyaPersonalShare || 0);
+    document.getElementById('minoyaTotalPrice').textContent = minoyaTotal.toLocaleString();
 }
 
 function renderTable() {
@@ -347,6 +370,7 @@ function renderTableBody(dates) {
             if (isPast) cellClass += ' locked'; // 過去の日は操作不可
             if (status === 'circle') { cellClass += ' circle'; dailyTotal++; }
             else if (status === 'cross') { cellClass += ' cross'; }
+            else if (status === 'special') { cellClass += ' special-mark'; }
             html += `<td class="${cellClass}" data-date="${dateStr}" data-employee="${escapeHtml(emp)}"></td>`;
         });
         html += `<td class="total-cell">${dailyTotal > 0 ? dailyTotal : ''}</td></tr>`;
@@ -406,6 +430,51 @@ function renderTableFoot() {
             html += `<td style="font-weight: 500; background: #fffbeb !important;">${escapeHtml(emp)}</td>`;
         });
         html += '<td class="total-cell">合計</td></tr>';
+
+        // ミノヤ会社負担(円)
+        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316;">ミノヤ会社負担(円)</td>';
+        let specialTotalCount = 0;
+        appState.employees.forEach(emp => {
+            const count = getEmployeeSpecialCount(emp);
+            specialTotalCount += count;
+            const amount = count * (appState.minoyaCompanyShare || 0);
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(specialTotalCount * (appState.minoyaCompanyShare || 0)).toLocaleString()}</td></tr>`;
+
+        // ミノヤ個人負担(円)
+        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316;">ミノヤ個人負担(円)</td>';
+        appState.employees.forEach(emp => {
+            const count = getEmployeeSpecialCount(emp);
+            const amount = count * (appState.minoyaPersonalShare || 0);
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(specialTotalCount * (appState.minoyaPersonalShare || 0)).toLocaleString()}</td></tr>`;
+
+        // ミノヤ合計(円)
+        const minoyaRate = (appState.minoyaCompanyShare || 0) + (appState.minoyaPersonalShare || 0);
+        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316; font-weight: 700;">ミノヤ合計(円)</td>';
+        appState.employees.forEach(emp => {
+            const count = getEmployeeSpecialCount(emp);
+            const amount = count * minoyaRate;
+            html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell">${(specialTotalCount * minoyaRate).toLocaleString()}</td></tr>`;
+
+        // 総合計 (通常 + ミノヤ)
+        const regularRate = appState.companyShare + appState.personalShare;
+
+        // 総合計：総額
+        html += '<tr class="detail-row"><td class="label-cell" style="font-weight: 800; background: #dcfce7 !important; color: #16a34a;">総合計：総額(円)</td>';
+        let grandGrandTotal = 0;
+        appState.employees.forEach(emp => {
+            const regCount = getEmployeeOrderCount(emp);
+            const spCount = getEmployeeSpecialCount(emp);
+            const amount = (regCount * regularRate) + (spCount * minoyaRate);
+            grandGrandTotal += amount;
+            html += `<td style="background: #dcfce7 !important; font-weight: 700;">${amount > 0 ? amount.toLocaleString() : ''}</td>`;
+        });
+        html += `<td class="total-cell" style="background: #bbf7d0 !important; color: #16a34a;">${grandGrandTotal.toLocaleString()}</td></tr>`;
     }
 
     tfoot.innerHTML = html;
@@ -438,7 +507,17 @@ function handleCellClick(e) {
     }
 
     const current = getOrderStatus(dateStr, employee);
-    let next = current === null ? 'circle' : (current === 'circle' ? 'cross' : null);
+    let next;
+    if (employee === '大竹') {
+        // null -> circle -> cross -> special -> null
+        if (current === null) next = 'circle';
+        else if (current === 'circle') next = 'cross';
+        else if (current === 'cross') next = 'special';
+        else next = null;
+    } else {
+        // null -> circle -> cross -> null
+        next = current === null ? 'circle' : (current === 'circle' ? 'cross' : null);
+    }
     setOrderStatus(dateStr, employee, next);
     saveData(); // Firebaseに送信
 }
@@ -453,7 +532,17 @@ function getEmployeeOrderCount(emp) {
     const dates = getDatesInMonth(appState.currentMonth);
     let count = 0;
     dates.forEach(date => {
-        if (appState.orders[date] && appState.orders[date][emp] === 'circle') count++;
+        const status = appState.orders[date] && appState.orders[date][emp];
+        if (status === 'circle') count++;
+    });
+    return count;
+}
+function getEmployeeSpecialCount(emp) {
+    const dates = getDatesInMonth(appState.currentMonth);
+    let count = 0;
+    dates.forEach(date => {
+        const status = appState.orders[date] && appState.orders[date][emp];
+        if (status === 'special') count++;
     });
     return count;
 }

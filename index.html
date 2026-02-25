@@ -77,6 +77,28 @@
                     <span id="totalPrice" class="total-price">0</span>
                 </div>
             </div>
+            <!-- ミノヤ設定行 -->
+            <div class="settings-row"
+                style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                <div class="setting-group">
+                    <label style="color: #f97316; font-weight: 700;">ミノヤ(㋯)設定:</label>
+                </div>
+                <div class="setting-group">
+                    <label>会社負担:</label>
+                    <span class="yen-prefix">¥</span>
+                    <input type="number" id="minoyaCompanyShare" class="amount-input" placeholder="0" min="0">
+                </div>
+                <div class="setting-group">
+                    <label>個人負担:</label>
+                    <span class="yen-prefix">¥</span>
+                    <input type="number" id="minoyaPersonalShare" class="amount-input" placeholder="0" min="0">
+                </div>
+                <div class="setting-group total-group" style="background: #fff7ed;">
+                    <label>計:</label>
+                    <span class="yen-prefix">¥</span>
+                    <span id="minoyaTotalPrice" class="total-price" style="color: #f97316;">0</span>
+                </div>
+            </div>
         </div>
 
         <!-- 社員管理 -->

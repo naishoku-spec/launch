@@ -419,6 +419,12 @@ body {
     color: var(--cross-color);
 }
 
+.order-cell.special-mark::before {
+    content: '㋯';
+    color: #f97316;
+    /* オレンジ色 */
+}
+
 /* Total Cells */
 .total-cell {
     background: #f0f9ff;
