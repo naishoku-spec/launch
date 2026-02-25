@@ -269,6 +269,7 @@ function initializeEventListeners() {
 
     document.getElementById('confirmBulkCircle').addEventListener('click', () => executeBulkOrder('circle'));
     document.getElementById('confirmBulkCross').addEventListener('click', () => executeBulkOrder('cross'));
+    document.getElementById('confirmBulkSpecial').addEventListener('click', () => executeBulkOrder('special'));
 
     // データ整理関連
     document.getElementById('deleteOldDataBtn').addEventListener('click', executeDeleteOldData);
@@ -601,7 +602,13 @@ function executeBulkOrder(status) {
     const employee = document.getElementById('bulkEmployeeSelect').value;
     if (!employee) return;
 
-    const markName = status === 'circle' ? '◯' : '×';
+    // 「㋯」は大竹さんのみ制限
+    if (status === 'special' && employee !== '大竹') {
+        alert('「㋯」の一括入力は大竹さんのみ適用可能です。');
+        return;
+    }
+
+    const markName = status === 'circle' ? '◯' : (status === 'cross' ? '×' : '㋯');
     if (!confirm(`${employee} さんの今月の全営業分を「${markName}」に一括変更しますか？\n（ロックされていない日のみ更新されます）`)) return;
 
     const today = new Date();
