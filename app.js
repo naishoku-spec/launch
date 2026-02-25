@@ -431,12 +431,20 @@ function renderTableFoot() {
         });
         html += '<td class="total-cell">合計</td></tr>';
 
-        // ミノヤ会社負担(円)
-        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316;">ミノヤ会社負担(円)</td>';
+        // ミノヤ(食)
+        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316;">ミノヤ(食)</td>';
         let specialTotalCount = 0;
         appState.employees.forEach(emp => {
             const count = getEmployeeSpecialCount(emp);
             specialTotalCount += count;
+            html += `<td>${count > 0 ? count : ''}</td>`;
+        });
+        html += `<td class="total-cell">${specialTotalCount}</td></tr>`;
+
+        // ミノヤ会社負担(円)
+        html += '<tr class="detail-row"><td class="label-cell" style="color: #f97316;">ミノヤ会社負担(円)</td>';
+        appState.employees.forEach(emp => {
+            const count = getEmployeeSpecialCount(emp);
             const amount = count * (appState.minoyaCompanyShare || 0);
             html += `<td>${amount > 0 ? amount.toLocaleString() : ''}</td>`;
         });
