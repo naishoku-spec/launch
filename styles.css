@@ -243,9 +243,8 @@ body {
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--border);
     overflow-x: auto;
-    /* 横方向のスクロールは必要に応じて残す */
-    overflow-y: visible;
-    /* 縦方向は全体表示 */
+    overflow-y: auto;
+    max-height: 75vh;
     margin-bottom: 20px;
 }
 
