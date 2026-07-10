@@ -291,6 +291,7 @@ function renderAll() {
     updatePeriodDisplay();
     updateTotalPrice();
     renderTable();
+    updateTodayTotal();
 }
 
 function updatePeriodDisplay() {
@@ -320,6 +321,21 @@ function renderTable() {
     renderTableHead();
     renderTableBody(dates);
     renderTableFoot();
+}
+
+function updateTodayTotal() {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    let total = 0;
+    if (appState.orders[todayStr]) {
+        Object.values(appState.orders[todayStr]).forEach(status => {
+            if (status === 'circle' || status === 'special') total++;
+        });
+    }
+    const textEl = document.getElementById('todayTotalText');
+    if (textEl) {
+        textEl.textContent = `本日は ${total} 食です`;
+    }
 }
 
 function renderTableHead() {

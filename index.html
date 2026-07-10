@@ -36,7 +36,15 @@
         <!-- ヘッダー -->
         <header class="header">
             <h1 class="title">お弁当注文表</h1>
-            <div class="period-display" id="periodDisplay"></div>
+            <div class="header-date-row">
+                <div class="period-display" id="periodDisplay"></div>
+                <!-- 本日の注文合計バナー（PC版のみ） -->
+                <div class="today-total-wrapper" id="todayTotalWrapper">
+                    <div class="today-total-banner" id="todayTotalBanner">
+                        <span class="today-total-text" id="todayTotalText"></span>
+                    </div>
+                </div>
+            </div>
         </header>
 
         <!-- 注文表テーブル -->

@@ -68,12 +68,47 @@ body {
     color: #000;
     font-weight: 700;
     line-height: 1.2;
+    margin-bottom: 0;
+}
+
+.header-date-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
     margin-bottom: 20px;
 }
 
 .period-br {
     display: none;
     /* PCでは改行しない */
+}
+
+/* Today Total Banner */
+.today-total-wrapper {
+    position: absolute;
+    right: 111px; /* 山本、優花の上に配置するための余白調整 */
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    margin: 0;
+    padding: 0;
+}
+
+.today-total-banner {
+    display: inline-block;
+    padding: 8px 24px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #a7f3d0;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.today-total-text {
+    font-size: 30px; /* 文字サイズを30pxに変更 */
+    font-weight: 700;
+    color: #065f46;
+    letter-spacing: 0.5px;
 }
 
 /* Settings Panel */
@@ -681,6 +716,10 @@ body {
         display: flex;
         flex-direction: column;
         padding: 16px;
+    }
+
+    .today-total-wrapper {
+        display: none;
     }
 
 
