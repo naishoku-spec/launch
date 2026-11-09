@@ -275,6 +275,8 @@ function showSyncStatus() {
     status.querySelector('.save-text').textContent = message ||
         (savedArchiveDay !== null && savedArchiveDay === archiveDay() ? 'クラウド同期済み・本日の控えあり' : 'クラウド同期済み');
 
+    // 保存中の入力停止は維持し、通常の保存ではボタンや欄の見た目を切り替えない。
+    document.body.classList.toggle('save-pending', saving && connected && liveState !== null);
     for (const id of EDIT_CONTROLS) document.getElementById(id).disabled = !canEdit();
     document.getElementById('orderTable').classList.toggle('read-only', !canEdit());
     document.getElementById('downloadBackupBtn').disabled = !displayedState;
@@ -561,6 +563,44 @@ function updateTodayTotal() {
     banner.textContent = '本日は ' + total + ' 食です';
 }
 
+function updateTableSection(section, html) {
+    if (section.innerHTML === html) return;
+    if (!section.rows?.length) {
+        section.innerHTML = html;
+        return;
+    }
+
+    const next = document.createElement(section.tagName);
+    next.innerHTML = html;
+    const rows = Array.from(section.rows);
+    const nextRows = Array.from(next.rows);
+    if (rows.length !== nextRows.length || rows.some((row, index) =>
+        row.cells.length !== nextRows[index].cells.length ||
+        Array.from(row.cells).some((cell, column) => cell.tagName !== nextRows[index].cells[column].tagName))) {
+        section.innerHTML = html;
+        return;
+    }
+
+    const updateAttributes = (current, replacement) => {
+        for (const attribute of Array.from(current.attributes)) {
+            if (!replacement.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+        }
+        for (const attribute of Array.from(replacement.attributes)) {
+            if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
+        }
+    };
+
+    // 同じ形の表では行とセルを残し、変わった印・合計・属性だけを更新する。
+    rows.forEach((row, index) => {
+        updateAttributes(row, nextRows[index]);
+        Array.from(row.cells).forEach((cell, column) => {
+            const replacement = nextRows[index].cells[column];
+            updateAttributes(cell, replacement);
+            if (cell.innerHTML !== replacement.innerHTML) cell.innerHTML = replacement.innerHTML;
+        });
+    });
+}
+
 function renderTableHead() {
     const thead = document.getElementById('tableHead');
     let html = '<tr><th class="date-header">月/日</th>';
@@ -568,7 +608,7 @@ function renderTableHead() {
         html += `<th>${escapeHtml(emp)}</th>`;
     });
     html += '<th class="total-header">合計</th></tr>';
-    thead.innerHTML = html;
+    updateTableSection(thead, html);
 }
 
 function renderTableBody(dates) {
@@ -614,7 +654,7 @@ function renderTableBody(dates) {
         });
         html += `<td class="total-cell">${pendingMark || (dailyTotal > 0 ? dailyTotal : '')}</td></tr>`;
     });
-    tbody.innerHTML = html;
+    updateTableSection(tbody, html);
     tbody.querySelectorAll('.order-cell').forEach(cell => cell.addEventListener('click', handleCellClick));
 }
 
@@ -724,7 +764,7 @@ function renderTableFoot() {
         html += `<td class="total-cell" style="background: #bbf7d0 !important; color: #16a34a;">${grandGrandTotal.toLocaleString()}</td></tr>`;
     }
 
-    tfoot.innerHTML = html;
+    updateTableSection(tfoot, html);
 }
 
 function toggleFooter() {

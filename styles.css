@@ -435,7 +435,7 @@ body {
     font-weight: 400;
 }
 
-.order-table.read-only .order-cell {
+body:not(.save-pending) .order-table.read-only .order-cell {
     cursor: default;
     pointer-events: none;
 }
@@ -443,6 +443,18 @@ body {
 .btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+/* 保存の完了待ちは入力を止めたまま、明るさとマウス位置の強調を保つ。 */
+.save-pending .btn:disabled {
+    opacity: 1;
+}
+
+.save-pending .amount-input:disabled {
+    color: FieldText;
+    background-color: Field;
+    -webkit-text-fill-color: currentColor;
+    opacity: 1;
 }
 
 /* Order Cells */
@@ -589,19 +601,6 @@ body {
     height: 8px;
     background: var(--success-color);
     border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
 }
 
 .save-status.saving .save-indicator {
