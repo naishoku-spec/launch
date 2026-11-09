@@ -413,6 +413,38 @@ body {
     /* Stronger green for the date cell */
 }
 
+/* Sync status */
+.sync-notice {
+    order: 2;
+    margin: 8px 0 12px;
+    padding: 10px 14px;
+    border: 1px solid #f0c775;
+    border-radius: 8px;
+    background: #fff6e3;
+    color: #744400;
+    line-height: 1.5;
+}
+
+.sync-notice[hidden] {
+    display: none;
+}
+
+.pending-order {
+    color: #64748b;
+    font-size: 0.875em;
+    font-weight: 400;
+}
+
+.order-table.read-only .order-cell {
+    cursor: default;
+    pointer-events: none;
+}
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 /* Order Cells */
 .order-cell {
     cursor: pointer;
@@ -761,7 +793,7 @@ body {
         margin-bottom: 12px;
     }
 
-    #deleteOldDataBtn {
+    #downloadBackupBtn {
         order: 6;
         width: 100%;
         margin-bottom: 20px;

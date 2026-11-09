@@ -81,206 +81,426 @@ function getHolidayName(dateStr) {
 // アプリケーション状態
 // ========================================
 
-let appState = {
-    employees: [...DEFAULT_EMPLOYEES],
-    currentMonth: new Date().toISOString().slice(0, 7), // YYYY-MM
+const RATE_DEFAULTS = {
     companyShare: 280,
     personalShare: 200,
     minoyaCompanyShare: 280,
     minoyaPersonalShare: 220,
-    orders: {} // { 'YYYY-MM-DD': { '社員名': 'circle' | 'cross' | null } }
+};
+const RATE_FIELDS = Object.keys(RATE_DEFAULTS);
+const VERIFIED_CACHE = STORAGE_KEY + ':verified';
+const PREVIOUS_CACHE = STORAGE_KEY + ':previous';
+const VIEW_MONTH_KEY = STORAGE_KEY + ':viewMonth';
+const ARCHIVE_PATH = 'bentoBackups/' + SECRET_KEY;
+const DAY_MS = 86_400_000;
+const JST_OFFSET_MS = 32_400_000;
+const ARCHIVE_SLOTS = 31;
+const MARKS = new Set(['circle', 'cross', 'special']);
+const EDIT_CONTROLS = [
+    ...RATE_FIELDS, 'addEmployeeBtn', 'manageEmployeesBtn', 'bulkOrderBtn', 'confirmAddEmployee',
+    'confirmBulkCircle', 'confirmBulkCross', 'confirmBulkSpecial',
+];
+
+let appState = {
+    employees: [...DEFAULT_EMPLOYEES],
+    currentMonth: japanDate().slice(0, 7),
+    ...RATE_DEFAULTS,
+    orders: {},
 };
 
-let db = null;
-let isFirebaseEnabled = false;
-let isFooterExpanded = false; // 集計詳細の開閉状態
+let db;
+let connected = false;
+let syncStarted = false;
+let liveState = null;
+let displayedState = null;
+let readProblem = '';
+let editMessage = '';
+let saving = false;
+let isFooterExpanded = false;
+let serverOffset = null;
+let savedArchiveDay = null;
+let archiveInProgress = false;
+let lastArchiveAttempt = null;
 
-// ========================================
-// 初期化
-// ========================================
+function japanDate(ms = Date.now()) {
+    return new Date(ms + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Firebaseが初期化されているか確認
-    if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-        db = firebase.database();
-        isFirebaseEnabled = true;
-        console.log("Firebase is enabled.");
+function isMonth(value) {
+    return typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value) &&
+        Number(value.slice(0, 4)) >= 100;
+}
 
-        // クラウドからデータをリアルタイム取得
-        const dataRef = db.ref(DB_PATH);
-        dataRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                appState = { ...appState, ...data };
-                renderAll();
-                updateInputValues();
-            } else {
-                // 初回アクセス時などはローカルデータをアップロード
-                loadLocalDataAndSync();
-            }
-        });
+function isEmployeeName(value) {
+    return typeof value === 'string' && value.trim().length > 0 && value.length <= 80 &&
+        !/[.#$\[\]/\x00-\x1f\x7f]/.test(value);
+}
+
+function isObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readRoster(value) {
+    let names;
+    if (Array.isArray(value)) {
+        names = value.filter(name => name !== null);
+    } else if (isObject(value) && Object.keys(value).every(key => /^\d+$/.test(key))) {
+        names = Object.values(value);
     } else {
-        console.warn("Firebase is not configured. Using local storage only.");
-        loadLocalDataAndSync();
+        return null;
     }
+    return names.length && names.every(isEmployeeName) && new Set(names).size === names.length ? names : null;
+}
 
-    initializeEventListeners();
-});
+function isRate(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+}
 
-// ========================================
-// データ管理
-// ========================================
+function readOrderState(value) {
+    if (!isObject(value) || !isObject(value.orders)) return null;
+    const employees = readRoster(value.employees);
+    if (!employees || !isRate(value.companyShare) || !isRate(value.personalShare)) return null;
+    if (RATE_FIELDS.some(field => Object.hasOwn(value, field) && !isRate(value[field]))) return null;
 
-function loadLocalDataAndSync() {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-        try {
-            const parsed = JSON.parse(savedData);
-            appState = { ...appState, ...parsed };
-
-            // 名前の移行処理 (荒野 -> 荒井、木井の削除)
-            migrateEmployeeNames();
-
-            if (isFirebaseEnabled) {
-                saveData(); // Firebaseに同期
-            }
-        } catch (e) {
-            console.error('データの読み込みに失敗しました:', e);
+    let hasOrders = false;
+    for (const [date, row] of Object.entries(value.orders)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isObject(row)) return null;
+        for (const [employee, mark] of Object.entries(row)) {
+            if (!isEmployeeName(employee) || !MARKS.has(mark)) return null;
+            hasOrders = true;
         }
     }
+    if (!hasOrders) return null;
+
+    const state = { employees, orders: value.orders };
+    for (const field of RATE_FIELDS) {
+        if (Object.hasOwn(value, field)) state[field] = value[field];
+    }
+    if (isMonth(value.currentMonth)) state.currentMonth = value.currentMonth;
+    return state;
+}
+
+function readLocal(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function writeLocal(key, value) {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function readBackup(raw) {
+    try {
+        return readOrderState(JSON.parse(raw));
+    } catch {
+        return null;
+    }
+}
+
+function rememberVerifiedState(state) {
+    const next = JSON.stringify(state);
+    const previous = readLocal(VERIFIED_CACHE);
+    if (next === previous) return;
+    if (readBackup(previous) && !writeLocal(PREVIOUS_CACHE, previous)) return;
+    writeLocal(VERIFIED_CACHE, next);
+}
+
+function showState(state) {
+    displayedState = state;
+    appState.employees = state.employees;
+    appState.orders = state.orders;
+    for (const field of RATE_FIELDS) appState[field] = state[field] ?? RATE_DEFAULTS[field];
     renderAll();
     updateInputValues();
 }
 
-function migrateEmployeeNames() {
-    let changed = false;
-    // 荒野 -> 荒井
-    const araiIndex = appState.employees.indexOf('荒野');
-    if (araiIndex !== -1) {
-        appState.employees[araiIndex] = '荒井';
-        Object.keys(appState.orders).forEach(date => {
-            if (appState.orders[date]['荒野']) {
-                appState.orders[date]['荒井'] = appState.orders[date]['荒野'];
-                delete appState.orders[date]['荒野'];
-            }
-        });
-        changed = true;
-    }
-    // 木井削除
-    const kiiIndex = appState.employees.indexOf('木井');
-    if (kiiIndex !== -1) {
-        appState.employees.splice(kiiIndex, 1);
-        Object.keys(appState.orders).forEach(date => {
-            if (appState.orders[date]['木井']) delete appState.orders[date]['木井'];
-        });
-        changed = true;
-    }
-    return changed;
-}
-
-function saveData() {
-    const saveStatus = document.getElementById('saveStatus');
-    saveStatus.classList.add('saving');
-    saveStatus.querySelector('.save-text').textContent = '保存中...';
-
-    // ローカルにも予備保存
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-
-    if (isFirebaseEnabled) {
-        // Firebaseに保存
-        db.ref(DB_PATH).set(appState)
-            .then(() => {
-                showSavedStatus();
-            })
-            .catch((error) => {
-                console.error("Firebase save failed:", error);
-                saveStatus.querySelector('.save-text').textContent = '保存エラー';
-            });
+function onCloudValue(snapshot) {
+    const state = readOrderState(snapshot.val());
+    if (!state) {
+        liveState = null;
+        readProblem = '共有の注文データを確認できないため、入力を止めています。';
     } else {
-        setTimeout(showSavedStatus, 300);
+        liveState = state;
+        readProblem = '';
+        showState(state);
+        rememberVerifiedState(state);
+        void saveDailyArchive();
+    }
+    showSyncStatus();
+}
+
+function onReadError() {
+    liveState = null;
+    readProblem = 'クラウドと同期できないため、入力を止めています。';
+    showSyncStatus();
+}
+
+function canEdit() {
+    return connected && liveState !== null && !saving;
+}
+
+function showSyncStatus() {
+    let message = editMessage;
+    if (saving) {
+        message = connected ? '変更した項目を保存中です。' : '接続が切れました。再接続後に保存結果を確認します。';
+    } else if (readProblem) {
+        message = readProblem;
+    } else if (!connected) {
+        message = syncStarted ? 'クラウドへの接続を待っています。' : '最新の注文を確認中です。';
+    } else if (!liveState) {
+        message = '注文データを読み込み中です。';
+    }
+    if ((!connected || !liveState) && !saving && displayedState) {
+        message += ' 今回サーバーから受信した注文を表示しています。';
+    } else if (!displayedState) {
+        message += ' 灰色の「—」は注文を確認中の欄です。';
+    }
+    updateTodayTotal();
+
+    const notice = document.getElementById('syncNotice');
+    notice.hidden = !message;
+    notice.textContent = message;
+    const status = document.getElementById('saveStatus');
+    status.classList.toggle('saving', !canEdit());
+    status.querySelector('.save-text').textContent = message ||
+        (savedArchiveDay !== null && savedArchiveDay === archiveDay() ? 'クラウド同期済み・本日の控えあり' : 'クラウド同期済み');
+
+    for (const id of EDIT_CONTROLS) document.getElementById(id).disabled = !canEdit();
+    document.getElementById('orderTable').classList.toggle('read-only', !canEdit());
+    document.getElementById('downloadBackupBtn').disabled = !displayedState;
+}
+
+function japanDayNumber(timestamp) {
+    return Math.floor((timestamp + JST_OFFSET_MS) / DAY_MS);
+}
+
+function archiveDay() {
+    return serverOffset === null ? null : japanDayNumber(Date.now() + serverOffset);
+}
+
+function archiveIsFromDay(snapshot, day) {
+    const timestamp = snapshot.val();
+    return typeof timestamp === 'number' && japanDayNumber(timestamp) === day;
+}
+
+async function saveDailyArchive() {
+    const day = archiveDay();
+    if (day === null || !connected || !liveState || archiveInProgress || day === savedArchiveDay) return;
+    if (lastArchiveAttempt?.day === day && Date.now() - lastArchiveAttempt.at < 5 * 60_000) return;
+
+    const stateToKeep = liveState;
+    const archive = db.ref(ARCHIVE_PATH + '/' + (day % ARCHIVE_SLOTS));
+    const timestamp = archive.child('createdAt');
+    archiveInProgress = true;
+    lastArchiveAttempt = { day, at: Date.now() };
+
+    try {
+        const existing = await timestamp.get();
+        if (!archiveIsFromDay(existing, day)) {
+            if (!connected || !liveState || day !== archiveDay()) return;
+            await archive.set({ createdAt: firebase.database.ServerValue.TIMESTAMP, state: stateToKeep });
+        }
+        savedArchiveDay = day;
+    } catch {
+        // 別の端末が先に作成した場合も、控えを上書きしない。
+        if (connected) {
+            try {
+                if (archiveIsFromDay(await timestamp.get(), day)) savedArchiveDay = day;
+            } catch {
+                // 次の接続や保存の機会に再試行する。
+            }
+        }
+    } finally {
+        archiveInProgress = false;
+        showSyncStatus();
     }
 }
 
-function showSavedStatus() {
-    const saveStatus = document.getElementById('saveStatus');
-    saveStatus.classList.remove('saving');
-    saveStatus.querySelector('.save-text').textContent = isFirebaseEnabled ? 'クラウド同期済み' : '自動保存済み(ローカル)';
+function downloadBackup() {
+    if (!displayedState) return;
+    const state = { ...displayedState, currentMonth: appState.currentMonth };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'お弁当注文表_控え_' + japanDate() + '.json';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ========================================
-// イベントリスナー
-// ========================================
+async function saveEdits(edits) {
+    if (!canEdit() || !edits.length) return false;
+    saving = true;
+    editMessage = '';
+    showSyncStatus();
+
+    try {
+        const results = await Promise.allSettled(edits.map(async ({ path, expected, next }) => {
+            return db.ref(DB_PATH + '/' + path).transaction(current => {
+                const unchanged = path === 'employees' ?
+                    JSON.stringify(readRoster(current)) === JSON.stringify(expected) : current === expected;
+                return unchanged ? next : undefined;
+            }, undefined, false);
+        }));
+        const conflicts = results.filter(result => result.status === 'fulfilled' && !result.value.committed).length;
+        const failures = results.filter(result => result.status === 'rejected').length;
+        const completed = results.length - conflicts - failures;
+        if (conflicts || failures) {
+            const reason = failures ? '保存に失敗した項目があります。' : '別の端末の変更が先に保存されました。';
+            editMessage = completed + '件を保存しました。' + reason + ' 表示を確認してから再入力してください。';
+            updateInputValues();
+            return false;
+        }
+        return true;
+    } finally {
+        saving = false;
+        showSyncStatus();
+    }
+}
+
+async function readOrdersForDisplay(viewAtStart) {
+    if (typeof firebaseConfig === 'undefined' || !firebaseConfig.databaseURL) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+        const url = new URL('/' + DB_PATH + '.json', firebaseConfig.databaseURL);
+        const response = await fetch(url, {
+            cache: 'no-store',
+            credentials: 'omit',
+            signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const state = readOrderState(await response.json());
+        // リアルタイム同期で先に表示が更新された場合は、その表示を使う。
+        if (!state || displayedState !== viewAtStart) return;
+        showState(state);
+        rememberVerifiedState(state);
+        showSyncStatus();
+    } catch {
+        // 通常の Firebase 同期で読み込みを続ける。
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function initializeOrderView() {
+    const month = readLocal(VIEW_MONTH_KEY);
+    if (isMonth(month)) appState.currentMonth = month;
+    initializeEventListeners();
+
+    renderAll();
+    updateInputValues();
+    showSyncStatus();
+
+    // 毎回サーバーから読み取り、端末に保存した控えは表示に使わない。
+    void readOrdersForDisplay(displayedState);
+}
+
+function startRealtimeSync() {
+    if (typeof firebase === 'undefined' || typeof firebase.database !== 'function') {
+        onReadError();
+        return;
+    }
+    try {
+        if (!firebase.apps.length) {
+            if (typeof firebaseConfig === 'undefined' || firebaseConfig.apiKey === 'YOUR_API_KEY') {
+                onReadError();
+                return;
+            }
+            firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+        syncStarted = true;
+        db.ref('.info/connected').on('value', snapshot => {
+            connected = snapshot.val() === true;
+            if (connected) void saveDailyArchive();
+            showSyncStatus();
+        });
+        db.ref('.info/serverTimeOffset').on('value', snapshot => {
+            const value = snapshot.val();
+            if (typeof value === 'number' && Number.isFinite(value)) serverOffset = value;
+            void saveDailyArchive();
+        });
+        db.ref(DB_PATH).on('value', onCloudValue, onReadError);
+        setInterval(saveDailyArchive, 60_000);
+        showSyncStatus();
+    } catch {
+        onReadError();
+    }
+}
+
+// app.js は Firebase の SDK より先に実行される。注文の表示を SDK の準備から切り離す。
+if (document.readyState === 'interactive') {
+    initializeOrderView();
+    document.addEventListener('DOMContentLoaded', startRealtimeSync, { once: true });
+} else if (document.readyState === 'complete') {
+    initializeOrderView();
+    startRealtimeSync();
+} else {
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeOrderView();
+        startRealtimeSync();
+    }, { once: true });
+}
 
 function initializeEventListeners() {
-    // 月選択
-    const monthSelector = document.getElementById('monthSelector');
-    monthSelector.addEventListener('change', (e) => {
-        appState.currentMonth = e.target.value;
-        saveData();
-        renderTable();
-        updatePeriodDisplay();
+    const listen = (id, event, handler) => document.getElementById(id).addEventListener(event, handler);
+
+    listen('monthSelector', 'change', event => {
+        if (!isMonth(event.target.value)) {
+            event.target.value = appState.currentMonth;
+            return;
+        }
+        appState.currentMonth = event.target.value;
+        writeLocal(VIEW_MONTH_KEY, appState.currentMonth);
+        renderAll();
     });
 
-    // 金額入力
-    const companyShare = document.getElementById('companyShare');
-    const personalShare = document.getElementById('personalShare');
+    for (const field of RATE_FIELDS) {
+        listen(field, 'change', async event => {
+            const value = event.target.valueAsNumber;
+            const current = liveState?.[field] ?? null;
+            if (!canEdit() || !isRate(value) || value === current) {
+                event.target.value = appState[field];
+                return;
+            }
+            if (!await saveEdits([{ path: field, expected: current, next: value }])) updateInputValues();
+        });
+    }
 
-    companyShare.addEventListener('input', (e) => {
-        appState.companyShare = parseInt(e.target.value) || 0;
-        updateTotalPrice();
-        saveData();
-    });
+    listen('addEmployeeBtn', 'click', openAddEmployeeModal);
+    listen('closeAddModal', 'click', closeAddEmployeeModal);
+    listen('cancelAddEmployee', 'click', closeAddEmployeeModal);
+    listen('confirmAddEmployee', 'click', addEmployee);
+    listen('manageEmployeesBtn', 'click', openManageEmployeesModal);
+    listen('closeManageModal', 'click', closeManageEmployeesModal);
+    listen('closeManageEmployees', 'click', closeManageEmployeesModal);
 
-    personalShare.addEventListener('input', (e) => {
-        appState.personalShare = parseInt(e.target.value) || 0;
-        updateTotalPrice();
-        saveData();
-    });
+    listen('bulkOrderBtn', 'click', openBulkOrderModal);
+    listen('closeBulkModal', 'click', closeBulkOrderModal);
+    listen('cancelBulkOrder', 'click', closeBulkOrderModal);
+    listen('confirmBulkCircle', 'click', () => executeBulkOrder('circle'));
+    listen('confirmBulkCross', 'click', () => executeBulkOrder('cross'));
+    listen('confirmBulkSpecial', 'click', () => executeBulkOrder('special'));
 
-    // ミノヤ金額入力
-    const minoyaCompanyShare = document.getElementById('minoyaCompanyShare');
-    const minoyaPersonalShare = document.getElementById('minoyaPersonalShare');
-
-    minoyaCompanyShare.addEventListener('input', (e) => {
-        appState.minoyaCompanyShare = parseInt(e.target.value) || 0;
-        updateTotalPrice();
-        saveData();
-    });
-
-    minoyaPersonalShare.addEventListener('input', (e) => {
-        appState.minoyaPersonalShare = parseInt(e.target.value) || 0;
-        updateTotalPrice();
-        saveData();
-    });
-
-    // 社員管理ボタンなど
-    document.getElementById('addEmployeeBtn').addEventListener('click', openAddEmployeeModal);
-    document.getElementById('closeAddModal').addEventListener('click', closeAddEmployeeModal);
-    document.getElementById('cancelAddEmployee').addEventListener('click', closeAddEmployeeModal);
-    document.getElementById('confirmAddEmployee').addEventListener('click', addEmployee);
-    document.getElementById('manageEmployeesBtn').addEventListener('click', openManageEmployeesModal);
-    document.getElementById('closeManageModal').addEventListener('click', closeManageEmployeesModal);
-    document.getElementById('closeManageEmployees').addEventListener('click', closeManageEmployeesModal);
-
-    // 一括入力ボタンの開閉
-    document.getElementById('bulkOrderBtn').addEventListener('click', openBulkOrderModal);
-    document.getElementById('closeBulkModal').addEventListener('click', closeBulkOrderModal);
-    document.getElementById('cancelBulkOrder').addEventListener('click', closeBulkOrderModal);
-
-    document.getElementById('confirmBulkCircle').addEventListener('click', () => executeBulkOrder('circle'));
-    document.getElementById('confirmBulkCross').addEventListener('click', () => executeBulkOrder('cross'));
-    document.getElementById('confirmBulkSpecial').addEventListener('click', () => executeBulkOrder('special'));
-
-    // データ整理関連
-    document.getElementById('deleteOldDataBtn').addEventListener('click', executeDeleteOldData);
+    listen('downloadBackupBtn', 'click', downloadBackup);
 }
 
 function updateInputValues() {
     document.getElementById('monthSelector').value = appState.currentMonth;
-    document.getElementById('companyShare').value = appState.companyShare;
-    document.getElementById('personalShare').value = appState.personalShare;
-    document.getElementById('minoyaCompanyShare').value = appState.minoyaCompanyShare || 0;
-    document.getElementById('minoyaPersonalShare').value = appState.minoyaPersonalShare || 0;
+    document.getElementById('companyShare').value = displayedState ? appState.companyShare : '';
+    document.getElementById('personalShare').value = displayedState ? appState.personalShare : '';
+    document.getElementById('minoyaCompanyShare').value = displayedState ? appState.minoyaCompanyShare : '';
+    document.getElementById('minoyaPersonalShare').value = displayedState ? appState.minoyaPersonalShare : '';
 }
 
 // ========================================
@@ -303,12 +523,17 @@ function updatePeriodDisplay() {
     const periodDisplay = document.getElementById('periodDisplay');
 
     // 期間の表示例: 2026年2月 (1/16 〜 2/15)
-    const startStr = `${startDate.getMonth() + 1}/${startDate.getDate()}`;
-    const endStr = `${endDate.getMonth() + 1}/${endDate.getDate()}`;
+    const startStr = `${startDate.getUTCMonth() + 1}/${startDate.getUTCDate()}`;
+    const endStr = `${endDate.getUTCMonth() + 1}/${endDate.getUTCDate()}`;
     periodDisplay.innerHTML = `${year}年${parseInt(month)}月 <br class="period-br">(${startStr} 〜 ${endStr})`;
 }
 
 function updateTotalPrice() {
+    if (!displayedState) {
+        document.getElementById('totalPrice').textContent = '—';
+        document.getElementById('minoyaTotalPrice').textContent = '—';
+        return;
+    }
     const total = appState.companyShare + appState.personalShare;
     document.getElementById('totalPrice').textContent = total.toLocaleString();
 
@@ -317,25 +542,21 @@ function updateTotalPrice() {
 }
 
 function renderTable() {
-    const dates = getDatesInMonth(appState.currentMonth);
     renderTableHead();
-    renderTableBody(dates);
-    renderTableFoot();
+    renderTableBody(getDatesInMonth(appState.currentMonth));
+    if (displayedState) renderTableFoot();
+    else document.getElementById('tableFoot').textContent = '';
 }
 
 function updateTodayTotal() {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-    let total = 0;
-    if (appState.orders[todayStr]) {
-        Object.values(appState.orders[todayStr]).forEach(status => {
-            if (status === 'circle' || status === 'special') total++;
-        });
+    const banner = document.getElementById('todayTotalText');
+    if (!displayedState) {
+        banner.textContent = '本日の注文を確認中';
+        return;
     }
-    const textEl = document.getElementById('todayTotalText');
-    if (textEl) {
-        textEl.textContent = `本日は ${total} 食です`;
-    }
+    const row = appState.orders[japanDate()] ?? {};
+    const total = Object.values(row).filter(status => status === 'circle' || status === 'special').length;
+    banner.textContent = '本日は ' + total + ' 食です';
 }
 
 function renderTableHead() {
@@ -351,19 +572,18 @@ function renderTableHead() {
 function renderTableBody(dates) {
     const tbody = document.getElementById('tableBody');
     let html = '';
+    const pendingMark = displayedState ? '' : '<span class="pending-order" aria-label="注文を確認中">—</span>';
 
-    // 今日の日付 (YYYY-MM-DD) を取得しておく
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    const todayStr = japanDate();
 
     dates.forEach(dateStr => {
         const date = new Date(dateStr);
-        const dayOfWeek = date.getDay();
+        const dayOfWeek = date.getUTCDay();
         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
         const isHoliday = getHolidayName(dateStr);
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 || isHoliday;
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
+        const month = date.getUTCMonth() + 1;
+        const day = date.getUTCDate();
         const isToday = dateStr === todayStr;
         const isPast = dateStr < todayStr;
 
@@ -388,9 +608,9 @@ function renderTableBody(dates) {
             if (status === 'circle') { cellClass += ' circle'; dailyTotal++; }
             else if (status === 'cross') { cellClass += ' cross'; }
             else if (status === 'special') { cellClass += ' special-mark'; }
-            html += `<td class="${cellClass}" data-date="${dateStr}" data-employee="${escapeHtml(emp)}"></td>`;
+            html += `<td class="${cellClass}" data-date="${dateStr}" data-employee="${escapeHtml(emp)}">${pendingMark}</td>`;
         });
-        html += `<td class="total-cell">${dailyTotal > 0 ? dailyTotal : ''}</td></tr>`;
+        html += `<td class="total-cell">${pendingMark || (dailyTotal > 0 ? dailyTotal : '')}</td></tr>`;
     });
     tbody.innerHTML = html;
     tbody.querySelectorAll('.order-cell').forEach(cell => cell.addEventListener('click', handleCellClick));
@@ -510,49 +730,37 @@ function toggleFooter() {
     renderTableFoot();
 }
 
-function handleCellClick(e) {
-    const cell = e.target;
-    const dateStr = cell.dataset.date;
-    const employee = cell.dataset.employee;
-
-    // 土日・祝日はクリック無効
-    const date = new Date(dateStr);
-    const dayOfWeek = date.getDay();
-    const isHoliday = getHolidayName(dateStr);
-    if (dayOfWeek === 0 || dayOfWeek === 6 || isHoliday) {
-        return;
-    }
-
-    // 過去の日は変更不可
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-    if (dateStr < todayStr) {
+async function handleCellClick(event) {
+    if (!canEdit()) return;
+    const { date, employee } = event.currentTarget.dataset;
+    if (!liveState.employees.includes(employee) || !isBusinessDay(date)) return;
+    if (date < japanDate()) {
         alert('過去の注文は変更できません。');
         return;
     }
+    const expected = getOrderStatus(date, employee);
+    let next = null;
+    if (expected === null) next = 'circle';
+    else if (expected === 'circle') next = 'cross';
+    else if (expected === 'cross' && employee === '大竹') next = 'special';
 
-    const current = getOrderStatus(dateStr, employee);
-    let next;
-    if (employee === '大竹') {
-        // null -> circle -> cross -> special -> null
-        if (current === null) next = 'circle';
-        else if (current === 'circle') next = 'cross';
-        else if (current === 'cross') next = 'special';
-        else next = null;
-    } else {
-        // null -> circle -> cross -> null
-        next = current === null ? 'circle' : (current === 'circle' ? 'cross' : null);
-    }
-    setOrderStatus(dateStr, employee, next);
-    saveData(); // Firebaseに送信
+    await saveEdits([{ path: orderPath(date, employee), expected, next }]);
 }
 
-function getOrderStatus(date, emp) { return (appState.orders[date] && appState.orders[date][emp]) || null; }
-function setOrderStatus(date, emp, status) {
-    if (!appState.orders[date]) appState.orders[date] = {};
-    if (status) appState.orders[date][emp] = status;
-    else delete appState.orders[date][emp];
+function isBusinessDay(date) {
+    const day = new Date(date).getUTCDay();
+    return day >= 1 && day <= 5 && !getHolidayName(date);
 }
+
+function orderPath(date, employee) {
+    return 'orders/' + date + '/' + employee;
+}
+
+function getOrderStatus(date, employee) {
+    const row = appState.orders[date];
+    return row && Object.hasOwn(row, employee) ? row[employee] : null;
+}
+
 function getEmployeeOrderCount(emp) {
     const dates = getDatesInMonth(appState.currentMonth);
     let count = 0;
@@ -572,113 +780,111 @@ function getEmployeeSpecialCount(emp) {
     return count;
 }
 
-// モーダル処理用 (addEmployee, deleteEmployee 等は既存と同様に appState を更新して saveData() を呼ぶ)
-function openAddEmployeeModal() { document.getElementById('addEmployeeModal').classList.add('active'); }
-function closeAddEmployeeModal() { document.getElementById('addEmployeeModal').classList.remove('active'); }
-function addEmployee() {
-    const rawInput = document.getElementById('newEmployeeName').value.trim();
-    if (!rawInput) return;
+function openAddEmployeeModal() {
+    if (canEdit()) document.getElementById('addEmployeeModal').classList.add('active');
+}
 
-    // 改行またはカンマで区切って配列にする
-    const rawNames = rawInput.split(/[\n,，]/);
-    let addedCount = 0;
+function closeAddEmployeeModal() {
+    document.getElementById('addEmployeeModal').classList.remove('active');
+}
 
-    rawNames.forEach(rawName => {
-        const name = rawName.trim();
-        if (name && !appState.employees.includes(name)) {
-            appState.employees.push(name);
-            addedCount++;
-        }
-    });
-
-    if (addedCount > 0) {
-        saveData();
-        document.getElementById('newEmployeeName').value = ''; // 入力をクリア
+async function addEmployee() {
+    if (!canEdit()) return;
+    const field = document.getElementById('newEmployeeName');
+    const names = field.value.split(/[\n,，]/).map(name => name.trim()).filter(Boolean);
+    if (!names.length) return;
+    if (!names.every(isEmployeeName)) {
+        alert('社員名は80文字以内で、. # $ [ ] / を含まない名前を入力してください。');
+        return;
+    }
+    const expected = liveState.employees;
+    const next = [...new Set([...expected, ...names])];
+    if (next.length === expected.length) {
+        alert('入力された社員はすでに名簿にあります。');
+        return;
+    }
+    if (await saveEdits([{ path: 'employees', expected, next }])) {
+        field.value = '';
         closeAddEmployeeModal();
-    } else {
-        alert('既に追加されているか、名前が正しく入力されていません。');
     }
 }
+
 function openManageEmployeesModal() {
+    if (!canEdit()) return;
     const list = document.getElementById('employeeList');
-    list.innerHTML = appState.employees.map((emp, i) => `<li><span class="employee-name">${escapeHtml(emp)}</span> <button class="btn btn-danger btn-sm" onclick="deleteEmployee(${i})">削除</button></li>`).join('');
+    const items = appState.employees.map(name => {
+        const row = document.createElement('li');
+        const label = document.createElement('span');
+        label.className = 'employee-name';
+        label.textContent = name;
+        const button = document.createElement('button');
+        button.className = 'btn btn-danger btn-sm';
+        button.type = 'button';
+        button.textContent = '名簿から外す';
+        button.addEventListener('click', () => removeEmployee(name));
+        row.append(label, button);
+        return row;
+    });
+    list.replaceChildren(...items);
     document.getElementById('manageEmployeesModal').classList.add('active');
 }
-function closeManageEmployeesModal() { document.getElementById('manageEmployeesModal').classList.remove('active'); }
 
-// 一括入力モーダル処理
+function closeManageEmployeesModal() {
+    document.getElementById('manageEmployeesModal').classList.remove('active');
+}
+
+async function removeEmployee(name) {
+    if (!canEdit()) return;
+    const expected = liveState.employees;
+    if (!expected.includes(name)) {
+        openManageEmployeesModal();
+        return;
+    }
+    if (expected.length === 1) {
+        alert('名簿には1人以上必要です。');
+        return;
+    }
+    if (!confirm(name + 'さんを名簿から外しますか？ 過去の注文記録は残ります。')) return;
+    const next = expected.filter(employee => employee !== name);
+    await saveEdits([{ path: 'employees', expected, next }]);
+    openManageEmployeesModal();
+}
+
 function openBulkOrderModal() {
+    if (!canEdit()) return;
     const select = document.getElementById('bulkEmployeeSelect');
-    select.innerHTML = appState.employees.map(emp => `<option value="${escapeHtml(emp)}">${escapeHtml(emp)}</option>`).join('');
+    select.replaceChildren(...appState.employees.map(name => new Option(name, name)));
     document.getElementById('bulkOrderModal').classList.add('active');
 }
-function closeBulkOrderModal() { document.getElementById('bulkOrderModal').classList.remove('active'); }
 
-function executeBulkOrder(status) {
+function closeBulkOrderModal() {
+    document.getElementById('bulkOrderModal').classList.remove('active');
+}
+
+async function executeBulkOrder(status) {
+    if (!canEdit() || !MARKS.has(status)) return;
     const employee = document.getElementById('bulkEmployeeSelect').value;
-    if (!employee) return;
-
-    // 「㋯」は大竹さんのみ制限
+    if (!liveState.employees.includes(employee)) return;
     if (status === 'special' && employee !== '大竹') {
         alert('「㋯」の一括入力は大竹さんのみ適用可能です。');
         return;
     }
 
-    const markName = status === 'circle' ? '◯' : (status === 'cross' ? '×' : '㋯');
-    if (!confirm(`${employee} さんの今月の全営業分を「${markName}」に一括変更しますか？\n（ロックされていない日のみ更新されます）`)) return;
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-
-    const dates = getDatesInMonth(appState.currentMonth);
-    dates.forEach(dateStr => {
-        const date = new Date(dateStr);
-        const dayOfWeek = date.getDay();
-        const isHoliday = getHolidayName(dateStr);
-        const isPast = dateStr < todayStr;
-
-        // 土日・祝日・過去の日以外の営業日のみ更新
-        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isHoliday && !isPast) {
-            setOrderStatus(dateStr, employee, status);
-        }
-    });
-
-    saveData();
+    const today = japanDate();
+    const edits = [];
+    for (const date of getDatesInMonth(appState.currentMonth)) {
+        if (date < today || !isBusinessDay(date)) continue;
+        const expected = getOrderStatus(date, employee);
+        if (expected !== status) edits.push({ path: orderPath(date, employee), expected, next: status });
+    }
+    if (!edits.length) {
+        alert('この表示月に変更する営業日がありません。');
+        return;
+    }
+    const mark = { circle: '◯', cross: '×', special: '㋯' }[status];
+    if (!confirm(employee + 'さんの ' + edits.length + ' 日分を「' + mark + '」に変更しますか？')) return;
     closeBulkOrderModal();
-    renderAll();
-}
-
-function executeDeleteOldData() {
-    const currentYear = new Date().getFullYear();
-    const targetYear = currentYear - 1;
-
-    if (!confirm(`${targetYear}年以前の全ての注文データを削除しますか？\n（この操作は取り消せません）`)) return;
-    if (!confirm(`本当によろしいですか？\n${targetYear}年12月31日までのデータが全て消去されます。`)) return;
-
-    let deleteCount = 0;
-    Object.keys(appState.orders).forEach(dateStr => {
-        const year = parseInt(dateStr.split('-')[0]);
-        if (year <= targetYear) {
-            delete appState.orders[dateStr];
-            deleteCount++;
-        }
-    });
-
-    if (deleteCount > 0) {
-        saveData();
-        renderAll();
-        alert(`${deleteCount}件の過去データを削除しました。`);
-    } else {
-        alert('削除対象の古いデータは見つかりませんでした。');
-    }
-}
-
-function deleteEmployee(i) {
-    if (confirm('削除しますか？')) {
-        appState.employees.splice(i, 1);
-        saveData();
-        openManageEmployeesModal();
-    }
+    await saveEdits(edits);
 }
 
 function getDatesInMonth(m) {
@@ -703,4 +909,7 @@ function getDatesInMonth(m) {
     }
     return d;
 }
-function escapeHtml(s) { const t = document.createElement('div'); t.textContent = s; return t.innerHTML; }
+function escapeHtml(value) {
+    const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return String(value).replace(/[&<>"']/g, character => entities[character]);
+}
