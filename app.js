@@ -266,8 +266,10 @@ function showSyncStatus() {
     updateTodayTotal();
 
     const notice = document.getElementById('syncNotice');
-    notice.hidden = !message;
-    notice.textContent = message;
+    // 通常の保存中は下部の状態表示だけを更新し、表の上に帯を挿入しない。
+    const noticeMessage = saving && connected ? '' : message;
+    notice.hidden = !noticeMessage;
+    notice.textContent = noticeMessage;
     const status = document.getElementById('saveStatus');
     status.classList.toggle('saving', !canEdit());
     status.querySelector('.save-text').textContent = message ||
